@@ -20,8 +20,12 @@ Many of the samplers use the Dual-Averaging method to set their step sizes. This
 
 Additionally, all of these samplers can handle multiple parallel sampling chains except for the No-U-Turn Sampler and the Riemann Manifold HMC sampler. It is recomended to use many parallel samples, as this can significantly boost performance with minimal additional computational cost. Additionally, as these samplers were implemented in TensorFlow, they can easily be ran on GPUs. Especially in the case of many independent chains, these samplers are very well suited for use on GPUs.
 
+As a final note, there is a Metropolis-HastingsV2 sampler. This one is designed to work with lists of arbitrary tensors. Look at the code in testComplex.py to see how to use it. Allof the other samplers can only handle 1d vectors for their distributions.
+
 In order to actually run the sampler TensorFlow, numpy, and matplotlib must be installed. This can be accomplished through the command
 
 ```
 pip install tensorflow numpy matplotlib
 ```
+
+For further reference on the samplers, see the attached pdf. It contains my notes on the samplers as well as citations to the papers I used to learn about them.

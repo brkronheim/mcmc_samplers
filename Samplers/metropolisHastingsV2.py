@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from Samplers.sampler import Sampler
+from Samplers.samplerV2 import Sampler
 
 class MetropolisHastings(Sampler):
     """
@@ -12,6 +12,9 @@ class MetropolisHastings(Sampler):
     
     The value for alpha is adapted using the dual-averaging algorithm during
     burnin.
+    
+    This implementation differs from the other as it is built to handle
+    lists of Tensors, as opposed to just a single vector.
     """
     
     def __init__(self, dimensions, log_likelihood_fn, alpha,
@@ -19,6 +22,7 @@ class MetropolisHastings(Sampler):
                  t0 = 10, kappa = 0.75, target=0.6):
         """
         The constructor for the Metropolis-Hastings sampler
+
         Parameters
         ----------
         dimensions : the number of dimensions of the sampled distribution
@@ -35,9 +39,11 @@ class MetropolisHastings(Sampler):
         t0 : Greater than 0, stabalizes initial iterations  for dual-averaging
         kappa : controls step size schedule for dual-averaging
         target : target acceptance probability for dual-averaging
+
         Returns
         -------
         None.
+
         """
         self.dtype = dtype
         self.dimensions = dimensions
@@ -58,12 +64,14 @@ class MetropolisHastings(Sampler):
     def run_sampler_inner(self, initial_state):
         """
         The inner sampling step for the Metropolis-Hastings sampler
+
         Parameters
         ----------
         initial_state : the starting point for the sampler. It should be
             structured as [[1st chain - 1st dim, 2nd chain - 1st dim , ...],
                            [1st chain - 2nd dim, 2nd chain - 2nd dim , ...],
                            ...]
+
         Returns
         -------
         sampledVals: the states sampled by the Metropolis-Hastings sampler
@@ -73,7 +81,10 @@ class MetropolisHastings(Sampler):
         
         acceptance = tf.cast(0, self.dtype)
         
-        currentState = tf.cast(initial_state, self.dtype) 
+        #currentState = tf.cast(initial_state, self.dtype)
+        currentState = initial_state
+        
+        
         currentProb = self.log_likelihood_fn(currentState)
         
         
@@ -122,8 +133,8 @@ class MetropolisHastings(Sampler):
         tf.print("Final alpha", alpha)
         
         #tensorArray of set size to store samples
-        sampledVals = tf.TensorArray(self.dtype, size=self.samples,
-                                     dynamic_size=False)
+        sampledVals = [tf.TensorArray(self.dtype, size=self.samples,
+                                     dynamic_size=False)for x in range(self.dimensions)]
         
         #run sampler for the number of sampling steps
         samples += self.samples
@@ -137,7 +148,7 @@ class MetropolisHastings(Sampler):
                                                               currentProb,
                                                               alpha)
             acceptance+=tf.reduce_sum(accept)
-            sampledVals= sampledVals.write(i-self.burn_in, currentState)
+            sampledVals=[ vals.write(i-self.burn_in, state) for [vals, state] in zip(sampledVals, currentState)]
             
             
             return([tf.add(i, 1), currentState, currentProb, sampledVals,
@@ -149,7 +160,7 @@ class MetropolisHastings(Sampler):
                                             sampledVals, acceptance, alpha])
         
         #trun sampledVals into a normal Tensor
-        sampledVals = sampledVals.stack()                                                                                    
+        sampledVals = [vals.stack() for vals in sampledVals]                                                                                    
         
         return(sampledVals, acceptance)
 
@@ -158,10 +169,12 @@ class MetropolisHastings(Sampler):
     def one_step(self, currentState, currentProb, alpha):
         """
         A function which performs one step of the Metropolis-Hastings sampler
+
         Parameters
         ----------
         currentState : the current state for all the parallel chains
         currentProb : the current probabilities of the states
+
         Returns
         -------
         updatedState : the updated state for all the parallel chains
@@ -181,32 +194,43 @@ class MetropolisHastings(Sampler):
     def propose_states(self, currentState, alpha):
         """
         
+
         Parameters
         ----------
         currentState : the current state of the sampler for each chain
         alpha : current step size
+
         Returns
         -------
         newState : the proposed new state of the sampler for each chain
+
         """
-        step = alpha*tf.random.normal(currentState.shape, dtype=self.dtype)
-        newState=tf.add(currentState, step)
+        #step = alpha*tf.random.normal(currentState.shape, dtype=self.dtype)
+        
+        step = [tf.tensordot(alpha,tf.random.normal(state.shape, dtype=self.dtype),1) for state in currentState]
+        
+        newState = [tf.add(state, stepVal) for [state, stepVal] in zip(currentState, step)]
+        
+        #tf.add(currentState, step)
         return(newState)
 
    
     def accept_reject(self, currentState, currentProb, newState):
         """
         
+
         Parameters
         ----------
         currentState : the current state for all the parallel chains
         currentProb : the current probabilities of the states
         newState : the next proposed state for all the parallel chains
+
         Returns
         -------
         updatedState : the updated state for all the parallel chains
         updatedProb : the updated probabilities of the states
         acceptProb : acceptance probability for each chain
+
         """
         newProb = self.log_likelihood_fn(newState)
         
@@ -217,8 +241,8 @@ class MetropolisHastings(Sampler):
         acceptProb= tf.where(tf.math.is_nan(acceptProb),0*acceptProb,acceptProb)
         acceptProb = tf.where(0*acceptProb+1<acceptProb,0*acceptProb+1, acceptProb)
         
-        
         updatedProb = tf.where(acceptCriteria, newProb, currentProb)
-        updatedState = tf.where(acceptCriteria, newState, currentState)
         
+        updatedState = [tf.where(tf.reshape(tf.repeat(acceptCriteria,tf.size(stateN)//tf.size(acceptCriteria)), stateN.shape), stateN, stateO) for [stateN, stateO] in zip(newState, currentState)]
         return(updatedState, updatedProb, acceptProb)
+    

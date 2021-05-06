@@ -20,9 +20,11 @@ class Sampler(object):
         log_likelihood_fn : a function accepting a state from the distribution
             and returning the natural logarithm of the probability of that
             state. This probability need not be normalized.     
+
         Returns
         -------
         None.
+
         """
         
         self.dimensions=dimensions
@@ -47,9 +49,12 @@ class Sampler(object):
         samples : the number of sampling steps to take and save post burn-in  
         parallel_chains : the number of parallel chains being run, default is 1
             
+
         Returns
         -------
         None.
+
+
         """
         
         self.burn_in = burn_in
@@ -87,16 +92,21 @@ class Sampler(object):
         of the time the new state was accepted. Unless the sampler returns
         more information than this, this function likely will not need
         to be overwritten.
+
         Parameters
         ----------
         None
+
         Returns
         -------
         states : The sampled states from the sampler.
         acceptanceRate: The proportion of the time a new state was accepted
+
         """
 
-        states = np.array(self.sampledVals)
+        states = [np.array(vals) for vals in self.sampledVals]
         totalSamples = self.samples*self.parallel_chains
+        print(self.acceptance)
         acceptanceRate = np.array(self.acceptance/(totalSamples))
         return(states, acceptanceRate)
+    
